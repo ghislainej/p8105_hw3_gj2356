@@ -1,0 +1,178 @@
+---
+title: "p8105_hw3_gj2356"
+author: "Ghislaine Jumonville"
+date: "2023-10-10"
+output: github_document
+---
+
+```{r, include = FALSE}
+library(tidyverse)
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+```
+
+# PROBLEM 1
+
+Loading in the `instacart` dataset.
+```{r, results='hide'}
+library(p8105.datasets)
+data("instacart")
+summary(instacart)
+```
+
+The `instacart` data set has 1,384,617 observations of products in InstaCart orders with 15 variables. The data set has the order information for `r n_distinct(instacart$order_id)` different orders (`order_id`) from `r n_distinct(instacart$user_id)` different users (`user_id`). We also know the day of the week (`order_dow`) and the hour of the day the order was placed (`order_hour_of_day`) as well as how many days it has been since the user's last order (`days_since_prior_order`). There is information detailing the product ordered (`product_id`, `product_name`) and where the product can be found in store (`aisle_id`, `deparment_id` `aisle`, and `department`).   
+
+The code chunk below finds how many aisle there are in the data set and which aisles have the most items ordered from them.
+
+```{r, message=FALSE}
+instacart_aisles = 
+  instacart |> 
+    group_by(aisle_id, aisle) |> 
+    summarize(n_times_ordered = n()) |> 
+    arrange(desc(n_times_ordered))
+head(instacart_aisles)
+```
+
+There are `r n_distinct(instacart_aisles)` aisles. Most items are ordered from the "fresh vegetables" aisle (`aisle_id` = 83) with 150609 items ordered. The next most popular aisle is the "fresh fruits" aisle (`aisle_id` = 24) in which 150473 items are ordered from.
+
+The code chunk below creates a plot that shows the number of items ordered in each aisle, limiting this to aisles with more than 10000 items ordered.
+```{r, message=FALSE, warning=FALSE}
+filtered_aisles =
+  instacart_aisles |> 
+  filter(n_times_ordered > 10000)
+  
+filtered_aisles |> 
+  ggplot(aes(x = aisle, y = n_times_ordered)) + geom_col(width = 0.5, aes(fill = aisle)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none") +
+    labs(title = "Number of Items Ordered from Each Aisle",
+      x = "Aisle Name",
+      y = "Count")
+```
+
+
+The code chunk below creates a table showing the three most popular items in each of the aisles “baking ingredients”, “dog food care”, and “packaged vegetables fruits” and how many times they were ordered.
+```{r, message=FALSE, warning=FALSE}
+instacart_selected = instacart |> 
+  filter(aisle %in% c("baking ingredients", "dog food care", "packaged vegetables fruits")) |> 
+  group_by(aisle, product_name) |> 
+  summarize(n_times_ordered = n()) |> 
+  mutate(product_rank = rank(desc(n_times_ordered))) |> 
+  filter(product_rank < 4) |> 
+  arrange(desc(n_times_ordered)) |> 
+  select(product_rank, everything()) |> 
+  knitr::kable(
+    caption = "Top 3 Items Ordered in Selected Aisles",
+    col.names = c("Rank", "Aisle", "Product Name", "Times Ordered")
+  )
+instacart_selected
+```
+
+
+The code chunk below makes a table showing the mean hour of the day at which Pink Lady Apples and Coffee Ice Cream are ordered on each day of the week.
+
+```{r, message=FALSE, warning=FALSE}
+instacart |> 
+  select(product_name, order_dow, order_hour_of_day) |> 
+  filter(product_name %in% c("Pink Lady Apples", "Coffee Ice Cream")) |>
+  group_by(product_name, order_dow) |> 
+  summarize(mean_hour_of_day = mean(order_hour_of_day)) |> 
+  mutate(order_dow =
+           case_match(
+             order_dow,
+             0 ~ "Sunday",
+             1 ~ "Monday",
+             2 ~ "Tuesday",
+             3 ~ "Wednesday",
+             4 ~ "Thursday",
+             5 ~ "Friday",
+             6 ~ "Saturday"
+           )) |> 
+  pivot_wider(names_from = product_name, values_from = mean_hour_of_day) |> 
+  knitr::kable (
+    caption = "Mean Hour of the Day Selected Items Ordered",
+    col.names = c("Day of the Week", "Coffee Ice Cream", "Pink Lady Apples")
+  )
+```
+
+# PROBLEM 2
+
+Loading in the dataset `brfss_smart2010`.
+```{r, results = 'hide'}
+library(p8105.datasets)
+data("brfss_smart2010")
+```
+
+The code chunk below cleans the dataset `brfss_smart2010` and creates a new dataset `brfss_smart2010` that only includes the topic "Overall Health".
+```{r, message=FALSE, warning=FALSE}
+brfss_smart2010_health = 
+  brfss_smart2010 |> 
+    janitor::clean_names() |> 
+    filter(topic == "Overall Health", 
+           response %in% c("Excellent", "Very Good", "Good", "Fair", "Poor")) |> 
+    mutate(response =
+             factor(response, levels = str_c(c("Poor", "Fair", "Good", "Very Good", "Excellent"))))
+```
+
+The code chunk below identifies which states were observed at 7 or more locations in 2002 and in 2010.
+```{r, message=FALSE, warning=FALSE}
+brfss_smart2010_health |> 
+  group_by(year, locationabbr) |> 
+  filter(year == 2002) |> 
+  summarize(locations_count = n_distinct(locationdesc)) |> 
+  filter(locations_count >= 7)
+
+brfss_smart2010_health |> 
+  group_by(year, locationabbr) |> 
+  filter(year == 2010) |> 
+  summarize(locations_count = n_distinct(locationdesc)) |> 
+  filter(locations_count >= 7)
+```
+
+In 2002, 6 states were observed at 7 or more locations: Connecticut, Florida, Massachusetts, North Carolina, New Jersey, and Pennsylvania.
+
+In 2010, 14 states were observed at 7 or more locations: California, Colorado, Florida, Massachusetts, Maryland, North Carolina, Nebraska, New Jersey, New York, Ohio, Pennsylvania, South Carolina, Texas, and Washington.
+
+The code chunk below creates a dataset that is limited to 'Excellent' responses, and contains the year, state, and a new variable that averages `data_value` across different locations within a state.
+```{r, message=FALSE, warning=FALSE}
+excellent_responses =   
+  brfss_smart2010_health |> 
+    filter(response == "Excellent") |> 
+    select(response, year, locationabbr, locationdesc, data_value) |> 
+    group_by(year, locationabbr) |> 
+    summarize(average_data_value = mean(data_value))
+```
+
+
+The code chunk below creates a spaghetti plot of the average value of 'Excellent' responses by state over time.
+```{r, message = FALSE, warning=FALSE}
+excellent_responses |> 
+  ggplot(aes(x = year, y = average_data_value, group = locationabbr, color = locationabbr)) + 
+  geom_line() + 
+  labs(
+      title = "Average Value of 'Excellent' Responses by State Over Time",
+      x = "Year",
+      y = "Average Value")
+```
+
+Make a two-panel plot showing, for the years 2006, and 2010, distribution of data_value for responses (“Poor” to “Excellent”) among locations in NY State.
+
+```{r}
+brfss_smart2010_health |> 
+  filter(year %in% c(2006, 2010), locationabbr == "NY") |> 
+  ggplot(aes(x = data_value, fill = response)) +
+  geom_histogram() +
+  facet_grid(~year) +
+  labs(
+    title = "Responses among locations in NY State",
+    x = "Data Value",
+    y = "Count"
+  )
+```
+
+
+# PROBLEM 3
+
+I ran out of time :(
